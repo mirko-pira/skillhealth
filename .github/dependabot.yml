@@ -18,3 +18,8 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # `@1.88` on dtolnay/rust-toolchain is our Rust MSRV, NOT an action version.
+      # Dependabot misreads it and "bumps" to a non-existent Rust (e.g. 1.100),
+      # silently breaking the msrv gate. Bump the MSRV by hand when warranted.
+      - dependency-name: "dtolnay/rust-toolchain"
