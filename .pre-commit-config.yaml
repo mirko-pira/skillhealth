@@ -1,0 +1,7 @@
+# Local secret-scan gate. Enable once with: pre-commit install
+# Mirrors the gitleaks job in CI so leaks are caught before they ever land.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
