@@ -14,7 +14,7 @@
 [![Crates.io](https://img.shields.io/crates/v/skillhealth)](https://crates.io/crates/skillhealth)
 [![npm](https://img.shields.io/npm/v/skillhealth)](https://www.npmjs.com/package/skillhealth) -->
 
-**[Demo](#demo)** · **[What it does](#what-it-does)** · **[Why](#why)** · **[Compare](#how-it-compares)** · **[Install](#install)** · **[Quickstart](#quickstart)** · **[How it works](#how-it-works)** · **[Benchmarks](#benchmarks)** · **[Flags](#flags)** · **[Keymap](#tui-keymap)** · **[Privacy](#privacy)** · **[Roadmap](#whats-next)** · **[License](#license)**
+**[Demo](#demo)** · **[What it does](#what-it-does)** · **[Why](#why)** · **[Why a tool](#what-earns-a-dedicated-tool)** · **[Install](#install)** · **[Quickstart](#quickstart)** · **[How it works](#how-it-works)** · **[Benchmarks](#benchmarks)** · **[Flags](#flags)** · **[Keymap](#tui-keymap)** · **[Privacy](#privacy)** · **[Roadmap](#whats-next)** · **[License](#license)**
 
 </div>
 
@@ -24,15 +24,15 @@
   <img src="docs/demo/demo-tui.gif" alt="skillhealth live cockpit — heat-colored skill list with sparklines, live refresh on file change, doctor with copy-pasteable fixes" width="900">
 </p>
 
-The whole audit loop on one screen: `skillhealth` ranks every installed
-skill by usage heat — hot, warm, cold or dead, computed from your real
-transcripts — next to what each one costs in tokens, with a 12-week
-sparkline per skill. When a skill or transcript changes while the cockpit
-is open, the list re-ranks itself live — that's the dead `regex-build`
-skill flipping hot on camera above. `d` flips to doctor: everything broken
-becomes a finding with a *why* and a fix that `y` copies to your clipboard.
+Everything on one screen. `skillhealth` ranks each installed skill by usage
+heat (hot, warm, cold, or dead), computed from your real transcripts, next to
+what it costs in tokens and a 12-week sparkline. Change a skill or transcript
+while the cockpit is open and the list re-ranks itself; that's the dead
+`regex-build` skill going hot on camera above. Press `d` for doctor: anything
+broken becomes a finding with a *why* and a fix that `y` copies to your
+clipboard.
 
-The same data, scriptable: pipe it, `--json` it, gate CI on it.
+Same data, scriptable: pipe it, `--json` it, gate CI on it.
 
 <details>
 <summary><b>See the plain, scriptable output</b> — overview, doctor, detail</summary>
@@ -56,17 +56,16 @@ fixture environment ([`docs/demo/setup-demo.sh`](./docs/demo/setup-demo.sh)).
   <img src="docs/assets/dashboard.png" alt="skillhealth dashboard — force-directed skill graph with usage heat colors, doctor drawer, sortable table view" width="900">
 </p>
 
-`skillhealth graph --open` — the same portfolio as a living map: every
-skill a node sized by usage and colored by heat, real cross-references as
-edges, a doctor drawer, and a sortable table view. Drag, zoom, `/` to
-filter, click a node for usage trend and connections. Past 100 nodes the
-dashboard warns you first instead of silently serving a hairball.
+`skillhealth graph --open` shows the same portfolio as a map: each skill is a
+node sized by usage and colored by heat, cross-references are edges, with a
+doctor drawer and a sortable table view. Drag, zoom, `/` to filter, click a
+node for its usage trend and connections. Past 100 nodes it warns you first
+instead of rendering a hairball.
 
-Agent skills are the new dependency tree: a couple of marketplace installs
-later you're carrying hundreds of them, and every single one rides along in
-your context window in every session — used or not. skillhealth is the
-`flutter doctor` moment for that pile: one command, the full picture, and a
-copy-pasteable fix for everything that's wrong.
+Skills pile up like dependencies. A few marketplace installs in, you're
+carrying hundreds, and each one sits in your context window every session
+whether it fires or not. skillhealth gives you one command to see the whole
+pile and a pasteable fix for whatever's broken.
 
 > **Status:** v0.2 — full test suite green, validated against a real 330-skill
 > install and a 3.86 GB transcript corpus. Claude Code first; Codex and
@@ -89,8 +88,8 @@ copy-pasteable fix for everything that's wrong.
 - **Disabled-plugin awareness** — skills turned off via `enabledPlugins` get a
   dedicated `off` state: present on disk, never loaded, excluded from the
   always-on token total.
-- **Honest cost split** — every skill shows `always_on` (loaded every session)
-  vs `on_fire` (loaded only when invoked) token costs separately. The overview
+- **Cost split** — every skill shows `always_on` (loaded every session) vs
+  `on_fire` (loaded only when invoked) token costs separately. The overview
   footer shows the always-on total across your portfolio.
 - **Typed history cross-checks transcripts** — `history.jsonl` (Claude Code's
   own command log) is a second usage signal. Doctor finding W010 fires when a
@@ -109,9 +108,8 @@ copy-pasteable fix for everything that's wrong.
 - **Detail view** — `skillhealth <name>`: invocation count, last used, the
   token cost split (always-on vs on-fire), source, connected skills, and
   findings for that one skill.
-- **Fast enough to forget it's scanning** — parallel transcript scan with
-  an incremental cache: ~3ms startup, ~50ms warm runs, ~0.5s per GB cold —
-  measured on the 3.86 GB corpus above.
+- **Fast** — parallel transcript scan with an incremental cache: ~3ms startup,
+  ~50ms warm runs, ~0.5s per GB cold, measured on the 3.86 GB corpus above.
 - **Scriptable** — `--json` everywhere with a stable schema, `--md` for a
   Markdown report with a Mermaid graph, semantic exit codes
   (`0` healthy · `1` warnings · `2` errors) so it drops straight into CI
@@ -145,30 +143,22 @@ skillhealth cross-references three sources — what's on disk, what your
 transcripts say actually happened, and what CLAUDE.md promises — and
 turns every delta into a fix you can paste.
 
-## How it compares
+## What earns a dedicated tool
 
-There's a small but real category here now. **Skill Kit** is the incumbent
-inventory-and-audit tool; **skillvitals** frames the same observability
-instinct — which skills fire, which are dormant, what they cost.
-skillhealth's pitch is *second but better*: everything they do, plus the two
-things that actually change a decision, in engineering that holds up.
+Knowing which skills fire and which sit idle is the easy part. The useful job
+is tying four things together:
 
-The bet is that **heat alone is table stakes**. What earns a dedicated tool
-is the full intersection:
+- **Usage**: heat from real transcript invocations, not file dates.
+- **Cost**: the always-on vs on-fire token split, so a dead skill shows up as
+  what it costs you every session. The CLAUDE.md budget counts
+  `@import`-expanded content, which a surface read misses.
+- **Health**: a doctor where every finding has a *why* and a pasteable *fix*.
+  It reports; it never edits your files.
+- **Wiring**: which skills reference which, where CLAUDE.md triggers point,
+  what's shadowed or orphaned.
 
-- **Usage** — heat computed from real transcript invocations, not file dates.
-- **Cost** — the always-on vs on-fire token split, so dead skills show up as
-  the per-session tax they are. The CLAUDE.md budget counts `@import`-expanded
-  content, which naive scanners undercount.
-- **Health** — a doctor where every finding carries a *why* and a
-  copy-pasteable *fix*. It reports; it never edits your files.
-- **Wiring** — the relationship graph: which skills reference which, where
-  CLAUDE.md triggers point, what's shadowed or orphaned.
-
-Nobody else does usage **and** doctor-with-fixes **and** the relationship
-graph together — local, zero network, one static binary, with `--json` and
-semantic exit codes so the same data drops straight into CI. That intersection
-is the tool.
+All four in one pass, local, one static binary, with `--json` and semantic
+exit codes so the same data drops into CI.
 
 ## Install
 
