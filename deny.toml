@@ -1,0 +1,36 @@
+# cargo-deny configuration — supply-chain gate for CI.
+# Run locally with: cargo deny check
+
+[advisories]
+version = 2
+yanked = "deny"
+# Fail on vulnerabilities (always). For "unmaintained" advisories, only flag deps
+# we directly chose in this workspace — not deep transitive deps with no upgrade
+# path (e.g. number_prefix via indicatif, RUSTSEC-2025-0119), which we can't fix.
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+version = 2
+# Permissive licenses only — keeps the dependency tree adoption-friendly.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -1,0 +1,35 @@
+[package]
+name = "skillhealth"
+description = "Audit & observability for your agent skills — usage heat, doctor with fixes, relationship graph"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["skills", "agent", "cli", "audit", "doctor"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "../../README.md"
+
+[dependencies]
+skillhealth-core = { path = "../skillhealth-core", version = "0.2.0" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+owo-colors = "4"
+indicatif = "0.17"
+strsim = "0.11"
+open = "5"
+dirs = "6"
+serde_json.workspace = true
+chrono.workspace = true
+ratatui = "0.30"
+crossterm = { version = "0.29", features = ["event-stream"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+notify = "8"
+futures-util = "0.3"
+base64 = "0.22"
+
+[dev-dependencies]
+insta = "1"
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+portable-pty = "0.9"

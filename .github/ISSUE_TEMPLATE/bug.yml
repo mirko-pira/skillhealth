@@ -1,0 +1,51 @@
+name: Bug report
+description: Something skillhealth does wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For security issues, do **not** file here — see [SECURITY.md](../blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: skillhealth version
+      description: Output of `skillhealth --version`.
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: rustc
+    attributes:
+      label: Rust version (if built from source)
+      description: Output of `rustc --version`.
+      placeholder: "rustc 1.85.0"
+    validations:
+      required: false
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected to happen, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s) you ran. Redact any private paths.
+      placeholder: |
+        1. skillhealth doctor --scope all
+        2. ...
+    validations:
+      required: true

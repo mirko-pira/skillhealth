@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>skillhealth — your agent skills, mapped</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:         #0a0c12;
+  --surface:    rgba(24, 26, 34, 0.86);
+  --surface-2:  #1e212b;
+  --border:     rgba(255,255,255,0.08);
+  --border-2:   rgba(255,255,255,0.14);
+  --text:       #f4f5f7;
+  --text-dim:   #9aa0ae;
+  --text-faint: #565c6b;
+  --accent-a:   #38bdf8;
+  --accent-b:   #a78bfa;
+  --hot:        #ef4444; /* rosso vivo — temperatura */
+  --warm:       #fbbf24; /* ambra */
+  --cold:       #60a5fa; /* azzurro */
+  --dead:       #e2e8f0; /* bianco spento (ghost) */
+  --ok:         #34d399; /* verde — doctor finding ok */
+  --err:        #f87171; /* rosso — doctor finding err */
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+#bgGlow {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(900px 600px at 70% 20%, rgba(56,189,248,0.05), transparent 60%),
+    radial-gradient(800px 700px at 25% 85%, rgba(167,139,250,0.05), transparent 60%);
+}
+canvas#graph { position: fixed; inset: 0; z-index: 1; cursor: grab; }
+canvas#graph.dragging { cursor: grabbing; }
+
+/* ── Header ── */
+#header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: 56px;
+  background: rgba(10,12,18,0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 22px;
+}
+#wordmark {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 16px; font-weight: 800; letter-spacing: -0.03em;
+  user-select: none; white-space: nowrap;
+}
+#wordmark .glyph {
+  width: 22px; height: 22px; flex-shrink: 0;
+  background: conic-gradient(from 210deg, var(--accent-a), var(--accent-b), var(--accent-a));
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  opacity: 0.95;
+}
+#wordmark em {
+  font-style: normal;
+  background: linear-gradient(100deg, var(--accent-a), var(--accent-b));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+#stats { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+#stats b { color: var(--text); font-weight: 650; }
+#stats .sep { margin: 0 7px; color: var(--text-faint); }
+#stats .dead-n { color: var(--dead); font-weight: 650; }
+#scopeChip {
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 4px 11px; border-radius: 99px; white-space: nowrap;
+}
+#scopeChip b { color: var(--text); font-weight: 650; }
+#spacer { flex: 1; }
+#searchInput {
+  width: 230px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text); font-size: 12.5px;
+  padding: 7px 12px 7px 30px;
+  outline: none; transition: border-color .15s, width .2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' fill='none' stroke='%23565c6b' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 10px center;
+}
+#searchInput:focus { border-color: var(--accent-a); width: 280px; }
+#searchInput::placeholder { color: var(--text-faint); }
+
+#doctorPill {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(251,191,36,0.09);
+  border: 1px solid rgba(251,191,36,0.3);
+  color: var(--warm);
+  font-size: 12px; font-weight: 600;
+  padding: 6px 13px; border-radius: 99px;
+  cursor: pointer; user-select: none;
+  transition: background .15s;
+}
+#doctorPill:hover { background: rgba(251,191,36,0.16); }
+#doctorPill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warm); box-shadow: 0 0 8px var(--warm); }
+
+/* ── Doctor drawer ── */
+#doctorDrawer {
+  position: fixed; top: 64px; right: 22px; z-index: 99;
+  width: 420px; max-height: calc(100vh - 90px); overflow-y: auto;
+  background: var(--surface);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border-2); border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  padding: 18px;
+  display: none;
+}
+#doctorDrawer.open { display: block; animation: rise .18s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+#doctorDrawer h2 {
+  font-size: 13px; font-weight: 700; letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+}
+#doctorDrawer h2 .cmd { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); font-weight: 400; }
+.finding { padding: 11px 0; border-top: 1px solid var(--border); }
+.finding:first-of-type { border-top: none; }
+.finding .head { display: flex; gap: 9px; align-items: baseline; font-weight: 600; font-size: 12.5px; }
+.finding .sym { font-family: var(--mono); flex-shrink: 0; }
+.finding.err .sym { color: var(--err); }
+.finding.warn .sym { color: var(--warm); }
+.finding.ok .sym { color: var(--ok); }
+.finding .why { color: var(--text-dim); font-size: 11.5px; margin: 5px 0 7px 22px; line-height: 1.45; }
+.finding .fix {
+  margin-left: 22px;
+  font-family: var(--mono); font-size: 11px;
+  background: #11131a; border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 9px;
+  color: #c9d4e3; overflow-x: auto; white-space: nowrap;
+}
+.finding .fix::before { content: "→ "; color: var(--accent-a); }
+#doctorFoot {
+  margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-faint); font-family: var(--mono);
+}
+
+/* ── Detail panel ── */
+#detail {
+  position: fixed; top: 64px; left: 22px; z-index: 98;
+  width: 330px;
+  background: var(--surface);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border-2); border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.5);
+  padding: 18px;
+  display: none;
+}
+#detail.open { display: block; animation: rise .18s ease-out; }
+#detail .close {
+  position: absolute; top: 12px; right: 14px;
+  color: var(--text-faint); cursor: pointer; font-size: 16px; line-height: 1;
+}
+#detail .close:hover { color: var(--text); }
+#detail h3 { font-size: 16px; font-weight: 750; letter-spacing: -0.02em; font-family: var(--mono); }
+#detail .chips { display: flex; gap: 6px; margin: 9px 0 12px; flex-wrap: wrap; }
+.chip {
+  font-size: 10.5px; font-weight: 650; letter-spacing: 0.02em;
+  padding: 3px 9px; border-radius: 99px;
+  border: 1px solid var(--border-2);
+}
+#detail .desc { color: var(--text-dim); font-size: 12px; line-height: 1.55; margin-bottom: 14px; }
+#detail .row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 0; border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+#detail .row .k { color: var(--text-faint); }
+#detail .row .v { font-family: var(--mono); font-size: 11.5px; }
+#detail .spark { display: flex; align-items: flex-end; gap: 2px; height: 26px; }
+#detail .spark i {
+  width: 7px; background: linear-gradient(to top, var(--accent-a), var(--accent-b));
+  border-radius: 2px 2px 0 0; opacity: 0.9; min-height: 2px;
+}
+#detail .edges { margin-top: 12px; }
+#detail .edges .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); margin-bottom: 7px; }
+#detail .edge-tag {
+  display: inline-block; font-family: var(--mono); font-size: 11px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 6px; margin: 0 4px 5px 0;
+  cursor: pointer; transition: border-color .12s;
+}
+#detail .edge-tag:hover { border-color: var(--accent-a); color: var(--accent-a); }
+
+/* ── Legend ── */
+#legend {
+  position: fixed; bottom: 18px; left: 22px; z-index: 97;
+  display: flex; gap: 14px; align-items: center;
+  background: var(--surface);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 15px;
+  font-size: 11px; color: var(--text-dim);
+}
+#legend .it { display: flex; align-items: center; gap: 6px; }
+#legend .sw { width: 9px; height: 9px; border-radius: 50%; }
+#legend .sw.dead-sw { background: transparent; border: 1.5px dashed var(--dead); }
+
+/* ── Footer hint ── */
+#hint {
+  position: fixed; bottom: 18px; right: 22px; z-index: 97;
+  font-size: 11.5px; color: var(--text-dim);
+  background: var(--surface);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 15px;
+  font-family: var(--mono);
+}
+#hint .star { color: var(--accent-a); }
+#hint code { color: var(--text); }
+
+/* ── View toggle + Table ── */
+#viewToggle { display: flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+#viewToggle button { background: none; border: none; color: var(--text-dim); font-size: 12px; font-weight: 600; padding: 7px 14px; cursor: pointer; font-family: inherit; }
+#viewToggle button.active { background: rgba(56,189,248,0.14); color: var(--text); }
+#tableWrap { position: fixed; top: 56px; left: 0; right: 0; bottom: 0; z-index: 50; overflow: auto; padding: 0 22px 40px; display: none; background: var(--bg); }
+#tableWrap.open { display: block; }
+#filters { display: flex; gap: 8px; align-items: center; position: sticky; top: 0; z-index: 3; background: var(--bg); height: 60px; }
+.fchip { font-size: 11.5px; font-weight: 600; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; user-select: none; }
+.fchip:hover { border-color: var(--border-2); }
+.fchip.active { border-color: var(--accent-a); color: var(--text); background: rgba(56,189,248,0.10); }
+#tableWrap table { width: 100%; border-collapse: separate; border-spacing: 0; }
+#tableWrap th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); padding: 8px 10px; cursor: pointer; user-select: none; position: sticky; top: 60px; background: var(--bg); z-index: 2; border-bottom: 1px solid var(--border); }
+#tableWrap th:hover { color: var(--text); }
+#tableWrap th .arr { color: var(--accent-a); }
+#tableWrap td { padding: 9px 10px; border-top: 1px solid var(--border); font-size: 12.5px; }
+tr.rowx { cursor: pointer; }
+tr.rowx:hover td { background: rgba(255,255,255,0.03); }
+td.mono { font-family: var(--mono); font-size: 12px; }
+.spark-mini { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 16px; }
+.spark-mini i { width: 4px; background: linear-gradient(to top, var(--accent-a), var(--accent-b)); border-radius: 1px; min-height: 1px; }
+
+/* ── Tooltip ── */
+#tip {
+  position: fixed; z-index: 200; pointer-events: none;
+  background: #14161e; border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 7px 11px;
+  font-size: 11.5px; display: none;
+  box-shadow: 0 8px 26px rgba(0,0,0,0.5);
+  white-space: nowrap;
+}
+#tip b { font-family: var(--mono); }
+#tip .sub { color: var(--text-dim); font-size: 10.5px; margin-top: 2px; }
+
+/* ── Dense-graph warning ── */
+canvas#graph.blurred { filter: blur(7px); }
+#graphWarn {
+  position: fixed; inset: 56px 0 0 0; z-index: 95;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(10,12,18,0.35);
+}
+#graphWarn.open { display: flex; animation: rise .18s ease-out; }
+#graphWarn .card {
+  max-width: 430px; text-align: center;
+  background: var(--surface);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border-2); border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0,0,0,0.55);
+  padding: 26px 28px;
+}
+#graphWarn h2 { font-size: 15px; font-weight: 750; letter-spacing: -0.02em; }
+#graphWarn p { color: var(--text-dim); font-size: 12.5px; line-height: 1.55; margin: 9px 0 18px; }
+#graphWarn p code { font-family: var(--mono); color: var(--text); }
+#graphWarn .actions { display: flex; gap: 10px; justify-content: center; }
+#graphWarn button {
+  font-family: inherit; font-size: 12.5px; font-weight: 600;
+  padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+#graphWarn .primary { background: rgba(56,189,248,0.14); border: 1px solid var(--accent-a); color: var(--text); }
+#graphWarn .primary:hover { background: rgba(56,189,248,0.24); }
+#graphWarn .ghost { background: none; border: 1px solid var(--border-2); color: var(--text-dim); }
+#graphWarn .ghost:hover { color: var(--text); }
+</style>
+</head>
+<body>
+<div id="bgGlow"></div>
+<canvas id="graph"></canvas>
+
+<div id="header">
+  <div id="wordmark"><span class="glyph"></span>skill<em>health</em></div>
+  <div id="stats"><b>38</b> skills<span class="sep">·</span><b>3</b> sources<span class="sep">·</span><span class="dead-n">11 dead</span><span class="sep">·</span>scanned in <b>79ms</b></div>
+  <div id="scopeChip"></div>
+  <div id="spacer"></div>
+  <div id="viewToggle"><button id="vGraph" class="active">Graph</button><button id="vTable">Table</button></div>
+  <input id="searchInput" type="text" placeholder="search skills…" spellcheck="false">
+  <div id="doctorPill"><span class="dot"></span>3 issues</div>
+</div>
+
+<div id="doctorDrawer">
+  <h2>doctor <span class="cmd">$ skillhealth doctor</span></h2>
+  <div class="finding err">
+    <div class="head"><span class="sym">✗</span>broken symlink: framer-motion-animator</div>
+    <div class="why">Dangling symlink in ~/.claude/skills — Claude Code skips it silently.</div>
+    <div class="fix">rm ~/.claude/skills/framer-motion-animator</div>
+  </div>
+  <div class="finding warn">
+    <div class="head"><span class="sym">!</span>11 skills never used (oldest: 122 days)</div>
+    <div class="why">Their metadata costs ~7.8K tokens in every session's context window.</div>
+    <div class="fix">skillhealth dead --details</div>
+  </div>
+  <div class="finding warn">
+    <div class="head"><span class="sym">!</span>CLAUDE.md references /lint-fix — not on disk</div>
+    <div class="why">Stale trigger entry: the agent may try to invoke a skill that doesn't exist.</div>
+    <div class="fix">edit CLAUDE.md:31 — or create the skill</div>
+  </div>
+  <div class="finding ok">
+    <div class="head"><span class="sym">✓</span>frontmatter valid on all 38 skills</div>
+  </div>
+  <div class="finding ok">
+    <div class="head"><span class="sym">✓</span>no trigger conflicts detected</div>
+  </div>
+  <div id="doctorFoot">3 issues · exit code 2</div>
+</div>
+
+<div id="detail">
+  <span class="close" onclick="closeDetail()">×</span>
+  <h3 id="dName">—</h3>
+  <div class="chips" id="dChips"></div>
+  <div class="desc" id="dDesc"></div>
+  <div class="row"><span class="k">invocations</span><span class="v" id="dTotal"></span></div>
+  <div class="row"><span class="k">last used</span><span class="v" id="dLast"></span></div>
+  <div class="row"><span class="k">30-day trend</span><span class="spark" id="dSpark"></span></div>
+  <div class="row"><span class="k">source</span><span class="v" id="dLoc"></span></div>
+  <div class="edges"><div class="k">connected skills</div><div id="dEdges"></div></div>
+</div>
+
+<div id="tableWrap">
+  <div id="filters"></div>
+  <table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+</div>
+
+<div id="legend">
+  <span class="it"><span class="sw" style="background:var(--hot); box-shadow:0 0 7px var(--hot)"></span>hot ≤7d</span>
+  <span class="it"><span class="sw" style="background:var(--warm)"></span>warm ≤30d</span>
+  <span class="it"><span class="sw" style="background:var(--cold)"></span>cold</span>
+  <span class="it"><span class="sw dead-sw"></span>dead</span>
+  <span class="it" style="color:var(--text-faint)">drag · scroll to zoom · click for detail</span>
+</div>
+
+<div id="hint"><span class="star">✦</span> 11 dead skills — run <code>skillhealth doctor</code></div>
+<div id="tip"></div>
+
+<div id="graphWarn">
+  <div class="card">
+    <h2>⚠ Dense graph</h2>
+    <p id="graphWarnText"></p>
+    <div class="actions">
+      <button class="primary" id="graphWarnShow">Show graph anyway</button>
+      <button class="ghost" id="graphWarnTable">Open table view</button>
+    </div>
+  </div>
+</div>
+
+<script>window.__SKILLHEALTH_DATA__ = /*__SKILLHEALTH_DATA__*/null;</script>
+<script>
+/* ── Mock data — a synthetic, generic dev-skill portfolio (no real data) ── */
+const DOMAINS = {
+  "vcs":     "#a78bfa",
+  "review":  "#e05d5d",
+  "test":    "#2ecc71",
+  "build":   "#06b6d4",
+  "docs":    "#5b8dee",
+  "data":    "#f97316",
+  "infra":   "#ec4899",
+  "release": "#94a3b8",
+  // injected reports group by SkillSource kind, not demo domain
+  "user":    "#5b8dee",
+  "project": "#2ecc71",
+  "plugin":  "#a78bfa",
+};
+const domCol = d => DOMAINS[d] || "#7b8794";
+const SKILLS = [
+  // name, domain, total, state, last, loc, desc
+  ["commit-msg","vcs",142,"hot","2h ago","user","Write a conventional-commit message from the staged diff."],
+  ["pr-describe","vcs",24,"warm","4d ago","user","Draft a PR title and body from the commit range."],
+  ["branch-cleanup","vcs",18,"warm","9d ago","user","Prune merged and stale local branches."],
+  ["changelog","vcs",0,"dead","never","user","Keep CHANGELOG.md in sync with merged PRs."],
+  ["code-review","review",61,"hot","5h ago","user","Staff-level code review — few themes, a clear merge call."],
+  ["security-review","review",17,"warm","12d ago","user","Threat-model the diff: injection, secrets, authz gaps."],
+  ["silent-failure-hunter","review",9,"cold","33d ago","plugin","Find swallowed errors and missing error propagation."],
+  ["type-design","review",0,"dead","never","plugin","Audit type design for invariants and encapsulation."],
+  ["comment-audit","review",4,"cold","41d ago","plugin","Flag stale or misleading code comments."],
+  ["test-gen","test",38,"hot","1d ago","user","Generate unit tests for the current changes."],
+  ["e2e-runner","test",11,"warm","9d ago","project","Drive critical user flows end to end."],
+  ["coverage-gate","test",8,"cold","38d ago","project","Fail CI when coverage drops below the threshold."],
+  ["flaky-finder","test",0,"dead","never","project","Detect and quarantine flaky tests from CI logs."],
+  ["mutation-test","test",0,"dead","never","plugin","Score the suite with mutation testing."],
+  ["snapshot-test","test",6,"cold","35d ago","project","Manage and review snapshot test fixtures."],
+  ["build-fix","build",33,"hot","1d ago","user","Resolve build and type errors with minimal diffs."],
+  ["bundle-budget","build",26,"warm","7d ago","user","Check the production bundle against the size budget."],
+  ["dep-audit","build",7,"warm","15d ago","user","Scan dependencies for advisories and stale pins."],
+  ["tree-shake","build",0,"dead","never","user","Find and drop dead exports from the bundle."],
+  ["format-check","build",15,"warm","11d ago","user","Verify formatting and auto-fix the diff."],
+  ["scaffold","build",0,"dead","never","user","Scaffold a new module from a template."],
+  ["api-docs","docs",5,"cold","45d ago","user","Generate an API reference from source annotations."],
+  ["diagram-gen","docs",1,"cold","52d ago","plugin","Render architecture diagrams from a spec."],
+  ["readme-lint","docs",0,"dead","never","plugin","Check the README for broken links and stale badges."],
+  ["adr-write","docs",3,"cold","31d ago","user","Capture an architecture decision record."],
+  ["i18n-extract","docs",0,"dead","never","plugin","Extract translatable strings into message catalogs."],
+  ["csv-import","data",6,"cold","35d ago","project","Import CSV with schema validation."],
+  ["etl-runner","data",9,"cold","31d ago","project","Batch ETL runner for local datasets."],
+  ["db-migrate","data",21,"hot","3d ago","project","Generate and check a database migration."],
+  ["seed-data","data",0,"dead","never","project","Generate deterministic seed fixtures."],
+  ["sql-explain","data",5,"cold","39d ago","project","Explain and optimize a slow query plan."],
+  ["perf-audit","infra",19,"warm","8d ago","project","Profile hot paths and flag regressions."],
+  ["docker-slim","infra",4,"cold","40d ago","user","Shrink container images by auditing layers."],
+  ["log-triage","infra",0,"dead","never","user","Cluster error logs and surface the top offenders."],
+  ["env-doctor","infra",13,"warm","13d ago","user","Validate local env vars and tool versions."],
+  ["health-check","infra",7,"warm","16d ago","project","Probe service health endpoints before deploy."],
+  ["release-notes","release",0,"dead","never","plugin","Draft release notes from merged PRs."],
+  ["version-bump","release",12,"warm","10d ago","user","Bump semver and tag from the changelog."],
+];
+const EDGES = [
+  // vcs + release
+  ["commit-msg","pr-describe"],["pr-describe","branch-cleanup"],["pr-describe","changelog"],
+  ["changelog","version-bump"],["version-bump","release-notes"],
+  // review
+  ["code-review","security-review"],["code-review","silent-failure-hunter"],
+  ["security-review","silent-failure-hunter"],["type-design","code-review"],["comment-audit","code-review"],
+  // test
+  ["test-gen","coverage-gate"],["test-gen","e2e-runner"],["test-gen","mutation-test"],
+  ["e2e-runner","flaky-finder"],["coverage-gate","snapshot-test"],
+  // build (scaffold left isolated → floating dead ghost)
+  ["build-fix","dep-audit"],["build-fix","format-check"],["bundle-budget","tree-shake"],["bundle-budget","build-fix"],
+  // docs (i18n-extract left isolated → floating dead ghost)
+  ["api-docs","diagram-gen"],["api-docs","readme-lint"],["adr-write","diagram-gen"],
+  // data
+  ["csv-import","etl-runner"],["etl-runner","db-migrate"],["db-migrate","seed-data"],["db-migrate","sql-explain"],
+  // infra
+  ["perf-audit","docker-slim"],["perf-audit","log-triage"],["env-doctor","health-check"],
+  // thin bridges between communities
+  ["pr-describe","code-review"],["code-review","test-gen"],["bundle-budget","perf-audit"],
+];
+const STATE_COLOR = { hot:"#ef4444", warm:"#fbbf24", cold:"#60a5fa", dead:"#e2e8f0" };
+
+/* ── Data injection ── */
+const DEMO_SKILLS = SKILLS;
+const DEMO_EDGES  = EDGES;
+
+function adaptReport(r) {
+  return {
+    skills: r.skills.map(s => ({
+      name: s.name,
+      state: s.temperature,            // hot | warm | cold | dead (serde lowercase)
+      uses: s.usage.count,
+      lastUsed: s.usage.last_used,
+      tokens: s.est_tokens,
+      source: typeof s.source === "string" ? s.source.toLowerCase() : (s.source && s.source.kind) || "user",
+      description: s.description || "",
+    })),
+    edges: r.edges.map(e => ({ from: e.from, to: e.to, kind: e.kind })),
+    findings: r.findings.map(f => ({
+      severity: f.severity, code: f.code, title: f.title, why: f.why, fix: f.fix,
+    })),
+    summary: r.summary,
+    generatedAt: r.generated_at,
+    view: r.view ? {
+      scope: r.view.scope,
+      lens: r.view.lens,
+      projectLabel: r.view.project_label,
+    } : null,
+  };
+}
+
+const INJECTED = window.__SKILLHEALTH_DATA__;
+const _DATA = INJECTED ? adaptReport(INJECTED) : null;
+
+// Header scope/lens indicator. Injected reports carry the resolved view;
+// the standalone demo is a full-portfolio global view.
+(function renderScopeChip() {
+  const el = document.getElementById("scopeChip");
+  if (!el) return;
+  const v = _DATA && _DATA.view;
+  const scope = (v && v.scope) || "all";
+  const lens = (v && v.lens) || "global";
+  const label = v && v.projectLabel ? ` (${v.projectLabel})` : "";
+  el.innerHTML = `scope: <b>${scope}${label}</b> · lens: <b>${lens}</b>`;
+})();
+
+// Build SKILLS/EDGES arrays for graph engine from injected data (if present)
+const ACTIVE_SKILLS = _DATA
+  ? _DATA.skills.map(s => [s.name, s.source || "global", s.uses, s.state, s.lastUsed || "never", s.source || "global", s.description])
+  : DEMO_SKILLS;
+const ACTIVE_EDGES = _DATA
+  ? _DATA.edges.map(e => [e.from, e.to])
+  : DEMO_EDGES;
+
+// Active findings (for doctor drawer)
+const ACTIVE_FINDINGS = _DATA ? _DATA.findings : null;
+const ACTIVE_SUMMARY  = _DATA ? _DATA.summary : null;
+
+/* ── Graph engine ── */
+const cv = document.getElementById("graph"), ctx = cv.getContext("2d");
+let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  W = innerWidth; H = innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  cv.style.width = W + "px"; cv.style.height = H + "px";
+}
+resize(); addEventListener("resize", resize);
+
+const nodes = ACTIVE_SKILLS.map(([name, dom, total, state, last, loc, desc], i) => ({
+  name, dom, total, state, last, loc, desc, i,
+  x: W/2 + Math.cos(i * 2.39996) * (120 + i * 7),
+  y: H/2 + Math.sin(i * 2.39996) * (90 + i * 5),
+  vx: 0, vy: 0,
+  r: state === "dead" ? 7 : 8 + Math.sqrt(total) * 1.9,
+  spark: Array.from({length: 10}, (_, k) =>
+    state === "dead" ? 0 : Math.max(0, Math.round(total/8 + Math.sin(i*3+k*1.7)*total/10))),
+}));
+const byName = Object.fromEntries(nodes.map(n => [n.name, n]));
+const edges = ACTIVE_EDGES.filter(([a,b]) => byName[a] && byName[b]).map(([a,b]) => [byName[a], byName[b]]);
+const neighbors = {};
+nodes.forEach(n => neighbors[n.name] = new Set());
+edges.forEach(([a,b]) => { neighbors[a.name].add(b.name); neighbors[b.name].add(a.name); });
+
+let cam = { x: 0, y: 0, z: 0.88 };
+let hovered = null, selected = null, query = "";
+let alpha = 1;
+let camTouched = false;
+
+// Keep the whole graph in view until the user pans/zooms — at real-report
+// scale the settled cloud is far larger than the demo the 0.88 zoom was tuned on.
+function autoFit() {
+  if (!nodes.length) return;
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const n of nodes) {
+    x0 = Math.min(x0, n.x - n.r); x1 = Math.max(x1, n.x + n.r);
+    y0 = Math.min(y0, n.y - n.r); y1 = Math.max(y1, n.y + n.r);
+  }
+  const z = Math.min(0.88, 0.9 * Math.min(W / (x1 - x0 + 1), H / (y1 - y0 + 40)));
+  cam.z += (z - cam.z) * 0.08;
+  cam.x += ((W/2 - (x0 + x1)/2) * cam.z - cam.x) * 0.08;
+  cam.y += ((H/2 - (y0 + y1)/2) * cam.z - cam.y) * 0.08;
+}
+
+function tick() {
+  // physics
+  if (alpha > 0.003) {
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i];
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        let d2 = dx*dx + dy*dy + 0.01, d = Math.sqrt(d2);
+        const rep = 2600 / d2;
+        const ux = dx/d, uy = dy/d;
+        a.vx -= ux * rep; a.vy -= uy * rep;
+        b.vx += ux * rep; b.vy += uy * rep;
+      }
+      // centering
+      a.vx += (W/2 - a.x) * 0.0022;
+      a.vy += (H/2 + 20 - a.y) * 0.0028;
+    }
+    for (const [a, b] of edges) {
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let d = Math.sqrt(dx*dx + dy*dy) + 0.01;
+      const f = (d - 110) * 0.004;
+      const ux = dx/d, uy = dy/d;
+      a.vx += ux * f * d * 0.02; a.vy += uy * f * d * 0.02;
+      b.vx -= ux * f * d * 0.02; b.vy -= uy * f * d * 0.02;
+    }
+    for (const n of nodes) {
+      if (n === dragNode) continue;
+      n.vx *= 0.82; n.vy *= 0.82;
+      // spring force grows ~d²; uncapped it diverges to NaN once the initial
+      // spiral (radius ~7px·n) spans a few hundred nodes
+      const sp = Math.hypot(n.vx, n.vy);
+      if (sp > 60) { n.vx *= 60 / sp; n.vy *= 60 / sp; }
+      n.x += n.vx * alpha; n.y += n.vy * alpha;
+    }
+    alpha *= 0.997;
+  }
+  if (!camTouched) autoFit();
+  draw();
+  requestAnimationFrame(tick);
+}
+
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.translate(cam.x + W/2 * (1 - cam.z), cam.y + H/2 * (1 - cam.z));
+  ctx.scale(cam.z, cam.z);
+
+  const focus = hovered || selected;
+  const focusSet = focus ? new Set([focus.name, ...neighbors[focus.name]]) : null;
+  const match = n => !query || n.name.includes(query);
+
+  // edges
+  for (const [a, b] of edges) {
+    let on = (!focusSet || (focusSet.has(a.name) && focusSet.has(b.name))) && match(a) && match(b);
+    ctx.strokeStyle = on ? "rgba(148,163,184,0.34)" : "rgba(148,163,184,0.07)";
+    ctx.lineWidth = on && focusSet ? 1.6 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  // nodes
+  for (const n of nodes) {
+    const dim = (focusSet && !focusSet.has(n.name)) || !match(n);
+    const col = domCol(n.dom);
+    ctx.globalAlpha = dim ? 0.13 : (n.state === "dead" ? 0.45 : 1);
+    // glow for hot
+    if (n.state === "hot" && !dim) {
+      ctx.shadowColor = col; ctx.shadowBlur = 22;
+    } else ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r, 0, 7);
+    if (n.state === "dead") {
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1.3;
+      ctx.fillStyle = "rgba(226,232,240,0.08)";
+      ctx.fill(); ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = STATE_COLOR[n.state];
+      ctx.lineWidth = 1.8; ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    // label
+    if (!dim && (cam.z > 0.75 || n === hovered || n === selected)) {
+      ctx.fillStyle = dim ? "rgba(154,160,174,0.3)" : "#cdd3de";
+      ctx.font = (n === hovered || n === selected ? "600 " : "") + "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(n.name, n.x, n.y + n.r + 14);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* ── Interaction ── */
+let dragNode = null, panning = false, px = 0, py = 0;
+function toWorld(mx, my) {
+  return [
+    (mx - cam.x - W/2 * (1 - cam.z)) / cam.z,
+    (my - cam.y - H/2 * (1 - cam.z)) / cam.z,
+  ];
+}
+function pick(mx, my) {
+  const [wx, wy] = toWorld(mx, my);
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    const dx = wx - n.x, dy = wy - n.y;
+    if (dx*dx + dy*dy < (n.r + 5) * (n.r + 5)) return n;
+  }
+  return null;
+}
+const tip = document.getElementById("tip");
+cv.addEventListener("mousemove", e => {
+  if (dragNode) {
+    const [wx, wy] = toWorld(e.clientX, e.clientY);
+    dragNode.x = wx; dragNode.y = wy; dragNode.vx = dragNode.vy = 0;
+    alpha = Math.max(alpha, 0.12);
+    return;
+  }
+  if (panning) {
+    cam.x += e.clientX - px; cam.y += e.clientY - py;
+    px = e.clientX; py = e.clientY;
+    return;
+  }
+  hovered = pick(e.clientX, e.clientY);
+  cv.style.cursor = hovered ? "pointer" : "grab";
+  if (hovered) {
+    tip.style.display = "block";
+    tip.style.left = (e.clientX + 14) + "px";
+    tip.style.top = (e.clientY + 14) + "px";
+    tip.innerHTML = "<b>" + hovered.name + "</b><div class='sub'>" +
+      hovered.total + " uses · " + hovered.state + " · last " + hovered.last + "</div>";
+  } else tip.style.display = "none";
+});
+cv.addEventListener("mousedown", e => {
+  camTouched = true;
+  const n = pick(e.clientX, e.clientY);
+  if (n) { dragNode = n; }
+  else { panning = true; px = e.clientX; py = e.clientY; cv.classList.add("dragging"); }
+});
+addEventListener("mouseup", e => {
+  if (dragNode && Math.abs(dragNode.vx) < 0.5) {
+    const n = pick(e.clientX, e.clientY);
+    if (n === dragNode) openDetail(n);
+  }
+  dragNode = null; panning = false; cv.classList.remove("dragging");
+});
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  camTouched = true;
+  const f = e.deltaY < 0 ? 1.08 : 0.93;
+  cam.z = Math.min(2.6, Math.max(0.35, cam.z * f));
+}, { passive: false });
+
+/* ── Detail panel ── */
+const $ = id => document.getElementById(id);
+function openDetail(n) {
+  selected = n;
+  $("dName").textContent = n.name;
+  $("dChips").innerHTML =
+    "<span class='chip' style='color:" + domCol(n.dom) + "; border-color:" + domCol(n.dom) + "55'>" + n.dom + "</span>" +
+    "<span class='chip' style='color:" + STATE_COLOR[n.state] + "; border-color:" + STATE_COLOR[n.state] + "55'>" + n.state + "</span>";
+  $("dDesc").textContent = n.desc;
+  $("dTotal").textContent = n.total;
+  $("dLast").textContent = n.last;
+  $("dLoc").textContent = n.loc;
+  const mx = Math.max(...n.spark, 1);
+  $("dSpark").innerHTML = n.spark.map(v =>
+    "<i style='height:" + Math.max(2, v/mx*26) + "px'></i>").join("");
+  $("dEdges").innerHTML = [...neighbors[n.name]].map(m =>
+    "<span class='edge-tag' onclick='openDetail(byName[\"" + m + "\"])'>" + m + "</span>").join("") ||
+    "<span style='color:var(--text-faint); font-size:11px'>no connections</span>";
+  $("detail").classList.add("open");
+}
+function closeDetail() { selected = null; $("detail").classList.remove("open"); }
+
+/* ── Search + doctor ── */
+$("searchInput").addEventListener("input", e => {
+  query = e.target.value.trim().toLowerCase();
+  if (view === "table") renderTable();
+});
+$("doctorPill").addEventListener("click", () =>
+  $("doctorDrawer").classList.toggle("open"));
+addEventListener("keydown", e => {
+  if (e.key === "Escape") { closeDetail(); $("doctorDrawer").classList.remove("open"); $("searchInput").blur(); }
+  if (e.key === "/" && document.activeElement !== $("searchInput")) { e.preventDefault(); $("searchInput").focus(); }
+});
+
+/* ── Table view ── */
+let view = "graph", sortKey = "total", sortDir = -1, stateFilter = "all";
+function lastHours(s) {
+  if (s === "never") return Infinity;
+  const m = s.match(/(\d+)([hd])/);
+  return m ? (+m[1]) * (m[2] === "d" ? 24 : 1) : 1e9;
+}
+const COLS = [["name","skill"],["dom","domain"],["state","state"],["total","uses"],["spark","trend"],["last","last used"],["loc","source"]];
+function sortVal(n, k) {
+  if (k === "last") return lastHours(n.last);
+  if (k === "state") return ["hot","warm","cold","dead"].indexOf(n.state);
+  if (k === "spark") return n.total;
+  return n[k];
+}
+function renderTable() {
+  $("thead").innerHTML = "<tr>" + COLS.map(([k, label]) =>
+    "<th onclick=\"setSort('" + k + "')\">" + label +
+    (sortKey === k ? " <span class='arr'>" + (sortDir > 0 ? "↑" : "↓") + "</span>" : "") + "</th>").join("") + "</tr>";
+  let rows = nodes.filter(n => (stateFilter === "all" || n.state === stateFilter) && (!query || n.name.includes(query)));
+  rows.sort((a, b) => {
+    const va = sortVal(a, sortKey), vb = sortVal(b, sortKey);
+    return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
+  });
+  $("tbody").innerHTML = rows.map(n => {
+    const mx = Math.max(...n.spark, 1);
+    return "<tr class='rowx' onclick='openDetail(byName[\"" + n.name + "\"])'>" +
+      "<td class='mono' style='font-weight:600'>" + n.name + "</td>" +
+      "<td><span class='chip' style='color:" + domCol(n.dom) + "; border-color:" + domCol(n.dom) + "55'>" + n.dom + "</span></td>" +
+      "<td><span class='chip' style='color:" + STATE_COLOR[n.state] + "; border-color:" + STATE_COLOR[n.state] + "55'>" + n.state + "</span></td>" +
+      "<td class='mono'>" + n.total + "</td>" +
+      "<td><span class='spark-mini'>" + n.spark.map(v => "<i style='height:" + Math.max(1, v/mx*16) + "px'></i>").join("") + "</span></td>" +
+      "<td class='mono' style='color:var(--text-dim)'>" + n.last + "</td>" +
+      "<td class='mono' style='color:var(--text-dim)'>" + n.loc + "</td></tr>";
+  }).join("");
+  const counts = { all: nodes.length };
+  ["hot","warm","cold","dead"].forEach(s => counts[s] = nodes.filter(n => n.state === s).length);
+  $("filters").innerHTML = ["all","hot","warm","cold","dead"].map(s =>
+    "<span class='fchip " + (stateFilter === s ? "active" : "") + "' onclick=\"setFilter('" + s + "')\">" + s + " · " + counts[s] + "</span>").join("");
+}
+function setSort(k) {
+  if (sortKey === k) sortDir *= -1;
+  else { sortKey = k; sortDir = (k === "name" || k === "dom" || k === "loc") ? 1 : -1; }
+  renderTable();
+}
+function setFilter(s) { stateFilter = s; renderTable(); }
+function setView(v) {
+  view = v;
+  $("tableWrap").classList.toggle("open", v === "table");
+  cv.style.display = v === "graph" ? "block" : "none";
+  $("legend").style.display = v === "graph" ? "flex" : "none";
+  $("vGraph").classList.toggle("active", v === "graph");
+  $("vTable").classList.toggle("active", v === "table");
+  if (v === "table") renderTable();
+  syncGraphWarn();
+}
+
+/* ── Dense-graph warning ── */
+// Past ~100 nodes the force layout settles into a hairball; warn once per load
+// instead of silently serving an unreadable graph.
+const GRAPH_WARN_THRESHOLD = 100;
+let graphWarnDismissed = false;
+function syncGraphWarn() {
+  const on = view === "graph" && !graphWarnDismissed && nodes.length > GRAPH_WARN_THRESHOLD;
+  $("graphWarn").classList.toggle("open", on);
+  cv.classList.toggle("blurred", on);
+}
+if (nodes.length > GRAPH_WARN_THRESHOLD) {
+  $("graphWarnText").innerHTML = "<b>" + nodes.length + " skills, " + edges.length +
+    " connections</b> — at this scale the graph gets hard to follow. " +
+    "Search (press <code>/</code>) highlights matching nodes, and the table view sorts and filters.";
+}
+$("graphWarnShow").onclick = () => { graphWarnDismissed = true; syncGraphWarn(); };
+$("graphWarnTable").onclick = () => { graphWarnDismissed = true; setView("table"); };
+syncGraphWarn();
+
+$("vGraph").onclick = () => setView("graph");
+$("vTable").onclick = () => setView("table");
+if (location.hash === "#table") setView("table");
+
+// test hook: lets a headless browser assert layout sanity (finite positions, node count)
+window.__SKILLHEALTH_DEBUG__ = { nodes, edges, cam: () => cam, graphWarn: () => ({
+  shown: $("graphWarn").classList.contains("open"), dismissed: graphWarnDismissed,
+}) };
+
+tick();
+
+/* ── Patch header + doctor drawer with real data if injected ── */
+if (_DATA) {
+  const s = ACTIVE_SUMMARY;
+  const dead = s ? s.dead : 0;
+  const total = s ? s.total : nodes.length;
+  const sources = _DATA ? [...new Set(_DATA.skills.map(sk => sk.source))].length : 3;
+  $("stats").innerHTML = "<b>" + total + "</b> skills<span class='sep'>·</span><b>" + sources + "</b> sources<span class='sep'>·</span><span class='dead-n'>" + dead + " dead</span>";
+  $("hint").innerHTML = dead > 0
+    ? "<span class='star'>✦</span> " + dead + " dead skills — run <code>skillhealth doctor</code>"
+    : "<span class='star'>✦</span> all skills healthy";
+
+  const findings = ACTIVE_FINDINGS || [];
+  const errCount  = findings.filter(f => f.severity === "error").length;
+  const warnCount = findings.filter(f => f.severity === "warn").length;
+  const issueCount = errCount + warnCount;
+  const exitCode = errCount > 0 ? 2 : warnCount > 0 ? 1 : 0;
+  $("doctorPill").innerHTML = "<span class='dot'></span>" + issueCount + " issue" + (issueCount !== 1 ? "s" : "");
+
+  // rebuild doctor drawer
+  const drawerFindings = $("doctorDrawer");
+  let html = "<h2>doctor <span class='cmd'>$ skillhealth doctor</span></h2>";
+  if (findings.length === 0) {
+    html += "<div class='finding ok'><div class='head'><span class='sym'>✓</span>no issues found</div></div>";
+  } else {
+    findings.forEach(f => {
+      const cls = f.severity === "error" ? "err" : f.severity === "warn" ? "warn" : "ok";
+      const sym = cls === "err" ? "✗" : cls === "warn" ? "!" : "✓";
+      html += "<div class='finding " + cls + "'><div class='head'><span class='sym'>" + sym + "</span>" + (f.title || "") + "</div>";
+      if (f.why) html += "<div class='why'>" + f.why + "</div>";
+      if (f.fix) html += "<div class='fix'>" + f.fix + "</div>";
+      html += "</div>";
+    });
+  }
+  html += "<div id='doctorFoot'>" + issueCount + " issue" + (issueCount !== 1 ? "s" : "") + " · exit code " + exitCode + "</div>";
+  drawerFindings.innerHTML = html;
+  // NOTE: do NOT add another click listener here — mock's original at line 627 already handles toggle.
+}
+</script>
+</body>
+</html>

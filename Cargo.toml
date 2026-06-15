@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = ["crates/skillhealth-core", "crates/skillhealth"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/mirko-pira/skillhealth"
+homepage = "https://github.com/mirko-pira/skillhealth"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_norway = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+rayon = "1.10"
+walkdir = "2"
+thiserror = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

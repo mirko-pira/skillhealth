@@ -1,0 +1,22 @@
+[package]
+name = "skillhealth-core"
+description = "Core library for skillhealth — audit & observability for agent skills"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["skills", "agent", "audit", "doctor", "observability"]
+categories = ["development-tools"]
+readme = "../../README.md"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+chrono.workspace = true
+rayon.workspace = true
+walkdir.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,29 @@
+# skillhealth
+
+> flutter doctor for your agent skills. A single-binary Rust CLI that audits the agent skills installed in Claude Code: what you have, what you actually use (usage heat from real transcripts), what each one costs in context tokens, what's broken (a doctor with copy-pasteable fixes), and how they all connect (a relationship graph). Local only, zero network, zero telemetry.
+
+## What it measures
+
+- Usage heat (hot / warm / cold / dead) from real transcript invocations, not file dates or guesses.
+- Token cost per skill, split into always-on (loaded every session) vs on-fire (loaded only when invoked), with a portfolio-wide always-on total.
+- Health: ten doctor checks, each with a why and a copy-pasteable fix, including the CLAUDE.md token budget with `@import` resolution that naive scanners undercount. Doctor reports; it never edits your files.
+- Wiring: the relationship graph across user skills, project skills, and marketplace plugins, with shadowing and debris detection.
+
+## Install
+
+- `npx skillhealth` — zero install, real binaries (no Bun/Node runtime tricks).
+- `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/mirko-pira/skillhealth/releases/latest/download/skillhealth-installer.sh | sh`
+- `cargo install skillhealth`
+
+## Commands
+
+- `skillhealth` — live TUI cockpit: every skill ranked by usage heat, 12-week sparklines, live refresh when a skill or transcript changes.
+- `skillhealth doctor` — diagnostics; every finding has a why and a pasteable fix; semantic exit codes (0 healthy / 1 warnings / 2 errors) for CI.
+- `skillhealth graph --open` — interactive HTML dashboard of the skill relationship graph.
+- `skillhealth <name>` — detail view for one skill: usage, last used, token cost split, connected skills, findings.
+
+## Notes
+
+- Scriptable: `--json` everywhere with a stable schema, `--md` for a Markdown report with a Mermaid graph.
+- Built for Claude Code first; Codex and Gemini CLI are on the roadmap.
+- Open source under MIT OR Apache-2.0. Source: https://github.com/mirko-pira/skillhealth
