@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod cache;
 pub mod claude_md;
 pub mod discover;

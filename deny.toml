@@ -30,6 +30,17 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
+# Privacy guarantee: skillhealth is local-only, zero network. Ban HTTP client
+# crates so a future change can't silently add network capability.
+deny = [
+    { crate = "reqwest" },
+    { crate = "hyper" },
+    { crate = "ureq" },
+    { crate = "isahc" },
+    { crate = "attohttpc" },
+    { crate = "surf" },
+    { crate = "curl" },
+]
 
 [sources]
 unknown-registry = "deny"
