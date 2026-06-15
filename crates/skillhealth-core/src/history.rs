@@ -154,16 +154,22 @@ mod tests {
         let root = tmp.path().canonicalize().unwrap();
         let inside = root.join("repo");
         std::fs::create_dir_all(&inside).unwrap();
+        // Build with serde_json so the path is escaped correctly on every
+        // platform: a raw `{}` interpolation of a Windows `C:\…` path yields
+        // invalid JSON escapes, the line is dropped, and the lens under-counts.
+        let in_line = serde_json::json!({
+            "display": "/cfo",
+            "timestamp": 1777490357212i64,
+            "project": inside.to_str().unwrap(),
+        })
+        .to_string();
         let f = write_history(&[
-            &format!(
-                r#"{{"display":"/cfo","timestamp":1777490357212,"project":"{}"}}"#,
-                inside.display()
-            ),
+            in_line.as_str(),
             r#"{"display":"/cfo","timestamp":1777490357212,"project":"/elsewhere"}"#,
             r#"{"display":"/cfo","timestamp":1777490357212}"#,
         ]);
         let raw = scan_history(f.path(), Some(&inside));
-        assert_eq!(raw["cfo"].count, 1); // no project field → global-only
+        assert_eq!(raw["cfo"].count, 1); // only the inside-root line matches the lens
     }
 
     #[test]

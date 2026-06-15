@@ -324,10 +324,17 @@ mod tests {
         std::fs::create_dir_all(&projects).unwrap();
         let proj_dir = root.join("dev").join("repo");
         std::fs::create_dir_all(&proj_dir).unwrap();
-        std::fs::write(projects.join("in.jsonl"), format!(
-            "{{\"type\":\"user\",\"cwd\":\"{}\",\"timestamp\":\"2026-06-05T08:00:00.000Z\",\"message\":{{\"role\":\"user\",\"content\":\"<command-name>/cfo</command-name>\"}}}}",
-            proj_dir.display()
-        )).unwrap();
+        // serde_json escapes the path correctly on every platform: a raw
+        // interpolation of a Windows `C:\…` cwd yields invalid JSON escapes,
+        // the line is dropped, and heat is silently under-counted on Windows.
+        let in_line = serde_json::json!({
+            "type": "user",
+            "cwd": proj_dir.to_str().unwrap(),
+            "timestamp": "2026-06-05T08:00:00.000Z",
+            "message": {"role": "user", "content": "<command-name>/cfo</command-name>"},
+        })
+        .to_string();
+        std::fs::write(projects.join("in.jsonl"), in_line).unwrap();
         std::fs::write(projects.join("out.jsonl"),
             r#"{"type":"user","cwd":"/somewhere/else","timestamp":"2026-06-05T08:00:00.000Z","message":{"role":"user","content":"<command-name>/cfo</command-name>"}}"#,
         ).unwrap();
