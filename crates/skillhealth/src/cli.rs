@@ -29,11 +29,11 @@ pub struct Cli {
     pub plain: bool,
 
     /// Which skills are listed: this repo's, everything, or user+plugins only
-    #[arg(long, global = true, value_enum)]
+    #[arg(short = 's', long, global = true, value_enum)]
     pub scope: Option<ScopeArg>,
 
     /// Which transcripts feed usage heat: this project's only, or all of them
-    #[arg(long, global = true, value_enum)]
+    #[arg(short = 'l', long, global = true, value_enum)]
     pub lens: Option<LensArg>,
 
     /// Claude config root (default: $CLAUDE_CONFIG_DIR, else ~/.claude)
