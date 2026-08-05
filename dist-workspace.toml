@@ -22,3 +22,7 @@ install-updater = false
 # Publish the npm installer package to the registry on tag (needs NPM_TOKEN secret).
 # crates.io publishing stays manual (core → bin, ordered) — see CHANGELOG/release flow.
 publish-jobs = ["npm"]
+# release.yml is dist-generated, but dependabot bumps the actions pinned inside it;
+# without this, `dist plan` fails on every dependabot PR that touches release.yml.
+# Trade-off: `dist init` regenerations are manual — re-run after bumping cargo-dist-version.
+allow-dirty = ["ci"]
