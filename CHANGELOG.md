@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- **Plugin-aware doctor**: dead plugin skills no longer get per-skill `rm -r` fixes pointing
+  into the synced plugin cache (wrong and non-actionable). They roll up into one **W011**
+  finding per plugin — `mostly-dead plugin — <name> (dead/total skills unused, ~N always-on
+  tokens/session)` — with a disable-the-plugin fix. Fires only when at least half of a
+  plugin's skills are dead; plugins that earn their keep stay quiet. On a plugin-heavy
+  install this collapses hundreds of warnings into a handful of actionable lines.
+- **W006 heavy-skill fix is source-aware**: plugin-vendored skills get "report upstream or
+  disable" instead of a restructuring suggestion you can't apply to the cache.
+- **Short flags**: `-s` for `--scope`, `-l` for `--lens`.
+- CI: weekly scheduled run (advisory drift surfaces without a push), `checkout@v7`,
+  `allow-dirty` for the dist-generated release.yml so dependabot action bumps pass `dist plan`.
+- Deps refreshed: clears RUSTSEC-2026-0190 (anyhow) and RUSTSEC-2026-0204 (crossbeam-epoch).
+
 ## 0.2.0 — 2026-06-15
 
 - **Scope picker** (`--scope project|all|user`): auto-detected as `project` when the repo has a `.claude/skills` dir; otherwise `all`; `p` key in the TUI cycles scopes live.

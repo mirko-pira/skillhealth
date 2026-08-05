@@ -281,6 +281,7 @@ skillhealth --cache-dir "$(mktemp -d)" --json      # force a cold scan
 - Broken or missing frontmatter (skills that will never load)
 - Broken symlinks and debris directories in your skill roots
 - Dead skills wasting context tokens in every session
+- Mostly-dead plugins, rolled up per plugin (W011) — the plugin, not the skill, is what you can disable
 - CLAUDE.md referencing skills that don't exist (drift)
 - CLAUDE.md token budget — **including `@import` resolution** (most tools miss this)
 - Shadowed skills (same name, two roots) and oversized skill bodies

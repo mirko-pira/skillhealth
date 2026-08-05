@@ -1,10 +1,10 @@
 use crate::claude_md::ClaudeMdInfo;
 use crate::discover::Discovery;
-use crate::model::{Severity, UsageStats};
+use crate::model::{Severity, SkillSource, UsageStats};
 use crate::usage::UsageScan;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub const CLAUDE_MD_TOKEN_BUDGET: usize = 5_000;
 pub const SKILL_TOKEN_BUDGET: usize = 2_000;
@@ -146,9 +146,16 @@ fn check_debris(d: &Discovery, out: &mut Vec<Finding>) {
 }
 
 fn check_dead(d: &Discovery, scan: &UsageScan, now: DateTime<Utc>, out: &mut Vec<Finding>) {
+    // Plugin skills can't be removed one by one (the cache resyncs), so dead
+    // ones roll up into one per-plugin W011 instead of per-skill W004s.
+    // plugin name → (enabled skills, dead skills, always-on tokens of the dead).
+    let mut plugins: BTreeMap<&str, (usize, usize, usize)> = BTreeMap::new();
     for s in &d.skills {
         if s.disabled {
             continue;
+        }
+        if let SkillSource::Plugin(p) = &s.source {
+            plugins.entry(p.as_str()).or_default().0 += 1;
         }
         let used = lookup_usage(scan, s).map(|u| u.count).unwrap_or(0) > 0;
         if used {
@@ -163,6 +170,12 @@ fn check_dead(d: &Discovery, scan: &UsageScan, now: DateTime<Utc>, out: &mut Vec
         let modified: DateTime<Utc> = modified.into();
         let age = (now - modified).num_days();
         if age > DEAD_SKILL_AGE_DAYS {
+            if let SkillSource::Plugin(p) = &s.source {
+                let entry = plugins.entry(p.as_str()).or_default();
+                entry.1 += 1;
+                entry.2 += s.always_on_tokens;
+                continue;
+            }
             let dir = s
                 .path
                 .parent()
@@ -178,6 +191,32 @@ fn check_dead(d: &Discovery, scan: &UsageScan, now: DateTime<Utc>, out: &mut Vec
             });
         }
     }
+    for (name, (total, dead, tokens)) in plugins {
+        // Below half dead the plugin earns its keep and there is no per-skill
+        // action anyway — stay quiet.
+        if dead == 0 || dead * 2 < total {
+            continue;
+        }
+        let title = if dead == total {
+            format!(
+                "dead plugin — {name} (all {total} skills unused, ~{tokens} always-on tokens/session)"
+            )
+        } else {
+            format!(
+                "mostly-dead plugin — {name} ({dead}/{total} skills unused, ~{tokens} always-on tokens/session)"
+            )
+        };
+        out.push(Finding {
+            severity: Severity::Warn,
+            code: "W011",
+            title,
+            why: "plugin skills load their descriptions into context every session; the plugin, not the skill, is the unit you can act on".into(),
+            fix: Some(format!(
+                "# unused plugin — disable it via /plugin in Claude Code, or set \"{name}\" to false under \"enabledPlugins\" in settings.json"
+            )),
+            skill: None,
+        });
+    }
 }
 
 fn check_heavy_skills(d: &Discovery, out: &mut Vec<Finding>) {
@@ -188,10 +227,15 @@ fn check_heavy_skills(d: &Discovery, out: &mut Vec<Finding>) {
                 code: "W006",
                 title: format!("heavy skill — {} (~{} tokens)", s.name, s.est_tokens),
                 why: "the whole SKILL.md body is loaded on trigger; heavy bodies eat the context window".into(),
-                fix: Some(format!(
-                    "# {} SKILL.md ~{} tokens — move reference material into a references/ dir",
-                    s.name, s.est_tokens
-                )),
+                fix: Some(match &s.source {
+                    SkillSource::Plugin(p) => format!(
+                        "# vendored by plugin '{p}' — report upstream, or disable the plugin if unused"
+                    ),
+                    _ => format!(
+                        "# {} SKILL.md ~{} tokens — move reference material into a references/ dir",
+                        s.name, s.est_tokens
+                    ),
+                }),
                 skill: Some(s.name.clone()),
             });
         }
@@ -508,6 +552,104 @@ mod tests {
         let dead: Vec<_> = f.iter().filter(|x| x.code == "W004").collect();
         assert_eq!(dead.len(), 1, "only the enabled skill goes dead");
         assert_eq!(dead[0].skill.as_deref(), Some("deadalive"));
+    }
+
+    #[test]
+    fn dead_plugin_skills_roll_up_to_w011() {
+        // Plugin skills live in a synced cache: `rm -r` is the wrong fix and
+        // the actionable unit is the plugin. 3 of 4 dead → one W011, no W004.
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("SKILL.md");
+        std::fs::write(&p, "x").unwrap();
+        let mut skills = vec![];
+        for name in ["a", "b", "c", "used"] {
+            let mut s = skill(name);
+            s.source = SkillSource::Plugin("megapack".into());
+            s.path = p.clone();
+            skills.push(s);
+        }
+        let d = Discovery {
+            skills,
+            debris: vec![],
+        };
+        let mut scan = empty_scan();
+        scan.per_skill.insert(
+            "used".into(),
+            UsageStats {
+                count: 3,
+                last_used: Some(now()),
+                ..Default::default()
+            },
+        );
+        let future = Utc.with_ymd_and_hms(2027, 6, 10, 12, 0, 0).unwrap();
+        let f = run(&d, &scan, &[], &HashMap::new(), future);
+        assert!(
+            !f.iter().any(|x| x.code == "W004"),
+            "plugin skills must never get per-skill W004"
+        );
+        let rollup: Vec<_> = f.iter().filter(|x| x.code == "W011").collect();
+        assert_eq!(rollup.len(), 1);
+        assert!(rollup[0].title.contains("megapack"));
+        assert!(rollup[0].title.contains("3/4"));
+        let fix = rollup[0].fix.as_deref().unwrap();
+        assert!(
+            !fix.contains("rm -r"),
+            "cache dirs resync — never suggest rm"
+        );
+        assert!(fix.contains("enabledPlugins"));
+    }
+
+    #[test]
+    fn mostly_used_plugin_stays_quiet() {
+        // 1 dead of 4: no per-skill action exists and the plugin earns its
+        // keep — neither W004 nor W011.
+        let tmp = tempfile::tempdir().unwrap();
+        let p = tmp.path().join("SKILL.md");
+        std::fs::write(&p, "x").unwrap();
+        let mut skills = vec![];
+        for name in ["a", "b", "c", "deadone"] {
+            let mut s = skill(name);
+            s.source = SkillSource::Plugin("goodpack".into());
+            s.path = p.clone();
+            skills.push(s);
+        }
+        let d = Discovery {
+            skills,
+            debris: vec![],
+        };
+        let mut scan = empty_scan();
+        for name in ["a", "b", "c"] {
+            scan.per_skill.insert(
+                name.into(),
+                UsageStats {
+                    count: 2,
+                    last_used: Some(now()),
+                    ..Default::default()
+                },
+            );
+        }
+        let future = Utc.with_ymd_and_hms(2027, 6, 10, 12, 0, 0).unwrap();
+        let f = run(&d, &scan, &[], &HashMap::new(), future);
+        assert!(!f.iter().any(|x| x.code == "W004"));
+        assert!(!f.iter().any(|x| x.code == "W011"));
+    }
+
+    #[test]
+    fn heavy_plugin_skill_fix_points_at_plugin_not_editing() {
+        // You don't edit files inside the plugin cache: W006 must not suggest
+        // restructuring the SKILL.md for plugin-sourced skills.
+        let mut s = skill("bigone");
+        s.source = SkillSource::Plugin("megapack".into());
+        s.est_tokens = 9000;
+        let d = Discovery {
+            skills: vec![s],
+            debris: vec![],
+        };
+        let f = run(&d, &empty_scan(), &[], &HashMap::new(), now());
+        let w006 = f.iter().find(|x| x.code == "W006").unwrap();
+        let fix = w006.fix.as_deref().unwrap();
+        assert!(!fix.contains("references/ dir"));
+        assert!(fix.contains("megapack"));
     }
 
     #[test]
